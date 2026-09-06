@@ -1,0 +1,26 @@
+[
+  {
+    "id": "agent-buyer-alpha",
+    "name": "Alpha Buyer",
+    "role": "buyer",
+    "description": "Research buyer agent that pays for market briefs and signal packs",
+    "paperBalanceUsdt": 100,
+    "paperBalanceUsdc": 50
+  },
+  {
+    "id": "agent-seller-brief",
+    "name": "Brief Seller",
+    "role": "seller",
+    "description": "Sells short-form market briefs via A2A x402 payments",
+    "paperBalanceUsdt": 10,
+    "paperBalanceUsdc": 5
+  },
+  {
+    "id": "agent-seller-signals",
+    "name": "Signal Pack Seller",
+    "role": "seller",
+    "description": "Sells curated signal packs to buyer agents",
+    "paperBalanceUsdt": 10,
+    "paperBalanceUsdc": 5
+  }
+]

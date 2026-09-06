@@ -1,0 +1,29 @@
+[
+  {
+    "id": "svc-market-brief",
+    "sellerAgentId": "agent-seller-brief",
+    "title": "BTC/ETH morning market brief",
+    "description": "One-page overnight movers + key levels for BTC and ETH",
+    "priceUsd": 5,
+    "asset": "USDT",
+    "memoHint": "market-brief-btc-eth"
+  },
+  {
+    "id": "svc-signal-pack",
+    "sellerAgentId": "agent-seller-signals",
+    "title": "Intraday signal pack (3 symbols)",
+    "description": "Paper signal pack for SOL, BNB, AVAX — educational only",
+    "priceUsd": 8,
+    "asset": "USDC",
+    "memoHint": "signal-pack-intraday"
+  },
+  {
+    "id": "svc-oversize-audit",
+    "sellerAgentId": "agent-seller-brief",
+    "title": "Oversize deep audit (demo reject)",
+    "description": "Intentionally priced above daily/x402 caps to demo risk rejection",
+    "priceUsd": 25,
+    "asset": "USDT",
+    "memoHint": "oversize-audit-reject"
+  }
+]
