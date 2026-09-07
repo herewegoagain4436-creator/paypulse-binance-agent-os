@@ -34,9 +34,27 @@ export function AppBody({ result }: { result: DemoRunResult }) {
           {String(result.settlement.usedMock)}
         </p>
         <p className="sub" style={{ marginTop: 8 }}>
-          success={result.successCount} · rejected={result.rejectedCount}
+          attempts={result.attemptCount} · fills={result.successCount} · rejected=
+          {result.rejectedCount}
         </p>
       </div>
+
+      {result.rationales.length ? (
+        <div className="card">
+          <h2>Why pay / why reject</h2>
+          <ul className="rationale-list">
+            {result.rationales.map((r, i) => (
+              <li key={`${r.decision}-${i}`}>
+                <span className={`pill decision-${r.decision}`}>{r.decision}</span>{" "}
+                <strong>{r.headline}</strong>
+                <div className="sub" style={{ marginTop: 4 }}>
+                  {r.narrative}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       <LedgerPanel ledger={result.ledger} />
     </div>

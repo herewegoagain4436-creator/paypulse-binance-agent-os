@@ -48,3 +48,12 @@ button:disabled { opacity: 0.5; cursor: wait; }
   display: inline-block; font-family: var(--mono); font-size: 0.7rem;
   padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted);
 }
+
+.badge-live { border-color: #0ecb81; color: #0ecb81; }
+.badge-paper { border-color: var(--warn); color: var(--warn); }
+.badge-mock { border-color: var(--hold); color: var(--hold); }
+.rationale-list { margin: 0; padding-left: 18px; }
+.rationale-list li { margin-bottom: 10px; }
+.decision-pay { color: var(--ok); border-color: var(--ok); }
+.decision-reject { color: var(--bad); border-color: var(--bad); }
+.decision-pending, .decision-awaiting_confirm { color: var(--warn); border-color: var(--warn); }

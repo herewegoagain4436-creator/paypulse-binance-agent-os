@@ -1,35 +1,62 @@
 ===========================================================
- PayPulse DEMO — Track A / Binance Agent OS Mini Hackathon
- Payment Workflows: A2A via x402 + MCP settlement context
+ PayPulse LIVE smoke — Track A / Binance Agent OS
+ A2A payments: intent → quote → confirm → settle (x402)
+ MCP: balances / settlement context (host-flexible OAuth)
 ===========================================================
 Agents: agent-buyer-alpha(buyer), agent-seller-brief(seller), agent-seller-signals(seller)
+PAYPULSE_MODE: live (default live)
 
 -- Dual-rail Agent OS --
   x402: https://www.binance.com/binancex402
+        mode=live
         documented daily cap=$20 (default, not a guarantee)
-        PAPER SIM — local x402-style settlement (not live Binance)
+        LIVE x402 — awaiting settle / host confirm (default mode)
   MCP:  https://agent.binance.com/mcp/agentic
-        oauth_client_id=grok
-        PAPER SIM — MCP settlement context from local paper balances (not live)
+        oauth_client_id=grok | mode=live
+        LIVE MCP — settlement context requires host OAuth (default mode)
 
 -- A2A payment ledger --
-  CONFIRMED_PAPER  agent-buyer-alpha → agent-seller-brief  5 USDT  | PAPER SIM — x402 settle (local ledger; not live Binance)
-  CONFIRMED_PAPER  agent-buyer-alpha → agent-seller-signals  8 USDC  | PAPER SIM — x402 settle (local ledger; not live Binance)
-  REJECTED         agent-buyer-alpha → agent-seller-brief  25 USDT  | amount $25 exceeds max payment size $15; projected daily spend $38.00 exceeds local daily spend cap $20; projected daily spend $38.00 exceeds documented x402 daily default cap $20 (documented default, not a guarantee — confirm in Binance App)
+  REJECTED         agent-buyer-alpha → agent-seller-brief  25 USDT  | REJECT — 25 USDT (agent-buyer-alpha → agent-seller-brief)
+         rationale: agent-buyer-alpha pays agent-seller-brief $25 USDT for service "Oversize deep audit (demo reject)" (svc-oversize-audit) via x402 (intent → quote → confirm → settle). Buyer seed USDT=100, daily left≈$20. Rejected because: amount $25 exceeds max payment size $15; projected daily spend $25.00 exceeds local daily spend cap $20; projected daily spend $25.00 exceeds documented x402 daily default cap $20 (documented default, not a guarantee — confirm in Binance App). Rules rationale — no LLM required.
+  PENDING          agent-buyer-alpha → agent-seller-signals  8 USDC  | PENDING — 8 USDC (honest live/path status)
+         rationale: agent-buyer-alpha pays agent-seller-signals $8 USDC for service "Intraday signal pack (3 symbols)" (svc-signal-pack) via x402 (intent → quote → confirm → settle). Buyer seed USDT=100, daily left≈$20. Live x402 settle acknowledged as PENDING — awaiting wallet/hub confirm. Not CONFIRMED_PAPER. Rules rationale — no LLM required.
+  PENDING          agent-buyer-alpha → agent-seller-brief  5 USDT  | PENDING — 5 USDT (honest live/path status)
+         rationale: agent-buyer-alpha pays agent-seller-brief $5 USDT for service "BTC/ETH morning market brief" (svc-market-brief) via x402 (intent → quote → confirm → settle). Buyer seed USDT=100, daily left≈$20. Live x402 settle acknowledged as PENDING — awaiting wallet/hub confirm. Not CONFIRMED_PAPER. Rules rationale — no LLM required.
 
--- Settlement context (MCP paper) --
-  buyer USDT=95 USDC=42
-  seller USDT=15 USDC=5
-  daily spend used=$13 left=$7
+-- Payment rationales (why pay / why reject) --
+  [reject] REJECT — 25 USDT (agent-buyer-alpha → agent-seller-brief)
+         - 25 USDT
+         - stage=intent
+         - status=REJECTED
+         - rail=x402
+  [pending] PENDING — 8 USDC (honest live/path status)
+         - 8 USDC
+         - stage=settle
+         - status=PENDING
+         - rail=x402
+  [pending] PENDING — 5 USDT (honest live/path status)
+         - 5 USDT
+         - stage=settle
+         - status=PENDING
+         - rail=x402
+
+-- Settlement context (MCP) --
+  buyer USDT=100 USDC=50
+  seller USDT=10 USDC=5
+  daily spend used=$0 left=$20
   source=snapshot usedMock=false
 
 -- Adapter meta --
-  mode=paper
-  x402: PAPER SIM — payment intent created locally (x402-style)
-  MCP:  PAPER SIM — MCP context from local paper balances (oauth_client_id=grok; not live)
+  mode=live
+  x402: LIVE — payment intent prepared for x402 rail (settle still needs wallet/host)
+  MCP:  LIVE MCP — OAuth required in MCP host (oauth_client_id=grok; Grok is one optional example). Showing local seed context only — not live account balances.
   x402 documented default cap: $20/day (not a guarantee)
 
+-- Summary --
+  Mode=live. A2A workflow attempts=3; paper/mock fills=0; rejected=1; pending-ish=2. Story: intent → quote → confirm → settle via x402; MCP for balances/context. Documented x402 daily default ~$20 — labeled default, not a guarantee. Rules rationales — no LLM required.
+
 DEMO PASS
-  2 successful paper A2A payment(s), 1 rejected (over cap / risk)
-  Workflow: intent → quote → confirm → settle (PAPER/SIM)
-  No secrets. No withdrawals. Mocks labeled when used.
+  3 payment attempt(s), 1 rejected, paper/mock fills=0
+  Workflow: intent → quote → confirm → settle via x402
+  Note: LIVE PENDING / auth REJECTED are expected without interactive wallet/MCP OAuth.
+  No secrets. No withdrawals. No fake live settles.

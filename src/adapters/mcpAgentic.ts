@@ -2,11 +2,12 @@
  * Binance Agent OS MCP adapter — account / settlement context for PayPulse.
  *
  * Endpoint: https://agent.binance.com/mcp/agentic
- * Auth: client OAuth (oauth_client_id=grok) — NO API keys on device.
+ * Auth: client OAuth via an MCP host (Grok is one optional example; other hosts may use
+ * a different oauth_client_id). NO API keys on device.
  * Do not open the MCP URL in a browser.
  *
  * Used here for balances / settlement context (read-oriented). No withdrawals.
- * Default: paper/sim with labeled mocks when live MCP unavailable.
+ * Default: live (PAYPULSE_MODE=live). Paper/mock are explicit opt-in only.
  */
 import { envNum, envStr } from "../core/env.js";
 import type { SettlementContext } from "../core/types.js";
@@ -16,6 +17,7 @@ export const AGENT_OS_MCP_URL = envStr(
   "https://agent.binance.com/mcp/agentic"
 );
 
+/** Example default client id for Grok; override for other MCP hosts. */
 export const AGENT_OS_OAUTH_CLIENT_ID = envStr(
   "BINANCE_AGENT_OS_OAUTH_CLIENT_ID",
   "grok"
@@ -32,9 +34,9 @@ export interface McpAdapterResult<T> {
 }
 
 function modeFromEnv(): AdapterMode {
-  const m = envStr("PAYPULSE_MODE", "paper").toLowerCase();
+  const m = envStr("PAYPULSE_MODE", "live").toLowerCase();
   if (m === "live" || m === "mock" || m === "paper") return m;
-  return "paper";
+  return "live";
 }
 
 async function tryMcpToolsList(endpoint: string): Promise<boolean> {
@@ -63,13 +65,19 @@ export class McpAgenticAdapter {
   readonly endpoint: string;
   readonly oauthClientId: string;
   private lastLabel =
-    "PAPER SIM — MCP settlement context from local paper balances (not live)";
+    "LIVE MCP — settlement context requires host OAuth (default mode)";
   private lastUsedMock = false;
 
   constructor(opts?: { mode?: AdapterMode }) {
     this.mode = opts?.mode ?? modeFromEnv();
     this.endpoint = AGENT_OS_MCP_URL;
     this.oauthClientId = AGENT_OS_OAUTH_CLIENT_ID;
+    if (this.mode === "paper") {
+      this.lastLabel =
+        "PAPER SIM (opt-in) — MCP settlement context from local paper balances (not live)";
+    } else if (this.mode === "mock") {
+      this.lastLabel = "MOCK (opt-in) — explicit MCP settlement context; not live Binance account";
+    }
   }
 
   status(): McpAdapterResult<null> {
@@ -84,7 +92,7 @@ export class McpAgenticAdapter {
 
   /**
    * Fetch settlement / balance context for A2A payments.
-   * Paper: local balances. Live: probe MCP; fall back to labeled MOCK.
+   * Paper: local balances. Mock: labeled mock. Live: probe MCP; never invent live fills.
    */
   async getSettlementContext(input: {
     buyerUsdt: number;
@@ -94,23 +102,23 @@ export class McpAgenticAdapter {
     dailySpendUsedUsd: number;
     dailyCapUsd: number;
   }): Promise<McpAdapterResult<SettlementContext>> {
-    const paperCtx = (): SettlementContext => ({
+    const seedCtx = (source: string, usedMock: boolean): SettlementContext => ({
       buyerBalanceUsdt: input.buyerUsdt,
       sellerBalanceUsdt: input.sellerUsdt,
       buyerBalanceUsdc: input.buyerUsdc,
       sellerBalanceUsdc: input.sellerUsdc,
       dailySpendUsedUsd: input.dailySpendUsedUsd,
       dailySpendLeftUsd: Math.max(0, input.dailyCapUsd - input.dailySpendUsedUsd),
-      source: "paper-local",
-      usedMock: false,
+      source,
+      usedMock,
     });
 
     if (this.mode === "paper") {
       this.lastUsedMock = false;
       this.lastLabel =
-        "PAPER SIM — MCP context from local paper balances (oauth_client_id=grok; not live)";
+        "PAPER SIM — MCP context from local paper balances (not live)";
       return {
-        data: paperCtx(),
+        data: seedCtx("paper-local", false),
         usedMock: false,
         label: this.lastLabel,
         endpoint: this.endpoint,
@@ -121,9 +129,8 @@ export class McpAgenticAdapter {
     if (this.mode === "mock") {
       this.lastUsedMock = true;
       this.lastLabel = "MOCK — explicit MCP settlement context; not live Binance account";
-      const ctx = { ...paperCtx(), source: "mock-labeled", usedMock: true };
       return {
-        data: ctx,
+        data: seedCtx("mock-labeled", true),
         usedMock: true,
         label: this.lastLabel,
         endpoint: this.endpoint,
@@ -131,33 +138,26 @@ export class McpAgenticAdapter {
       };
     }
 
+    // LIVE — honest: seed context only until MCP host OAuth is present (not a mock claim)
     const ok = await tryMcpToolsList(this.endpoint);
+    this.lastUsedMock = false;
     if (!ok) {
-      this.lastUsedMock = true;
       this.lastLabel =
-        "MOCK — Agent OS MCP/OAuth not available in-process; settlement context is local (not live)";
-      const ctx = { ...paperCtx(), source: "mock-fallback", usedMock: true };
+        `LIVE MCP — OAuth required in MCP host (oauth_client_id=${this.oauthClientId}; Grok is one optional example). Showing local seed context only — not live account balances.`;
       return {
-        data: ctx,
-        usedMock: true,
+        data: seedCtx("live-seed-awaiting-oauth", false),
+        usedMock: false,
         label: this.lastLabel,
         endpoint: this.endpoint,
         oauthClientId: this.oauthClientId,
       };
     }
 
-    // MCP reachable but we still do not invent live balances without OAuth host
-    this.lastUsedMock = true;
     this.lastLabel =
-      "MOCK — MCP reachable but no OAuth token in-process; labeled MOCK balances";
-    const ctx = {
-      ...paperCtx(),
-      source: "mock-mcp-reachable-no-oauth",
-      usedMock: true,
-    };
+      `LIVE MCP reachable — still no in-process OAuth token (client_id=${this.oauthClientId}); seed context only, not live balances`;
     return {
-      data: ctx,
-      usedMock: true,
+      data: seedCtx("live-mcp-reachable-no-oauth", false),
+      usedMock: false,
       label: this.lastLabel,
       endpoint: this.endpoint,
       oauthClientId: this.oauthClientId,

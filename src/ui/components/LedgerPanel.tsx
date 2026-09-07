@@ -11,7 +11,7 @@ export function LedgerPanel({ ledger }: { ledger: PaymentRecord[] }) {
             <th>From → To</th>
             <th>Amount</th>
             <th>Memo</th>
-            <th>Label / reason</th>
+            <th>Rationale / label</th>
           </tr>
         </thead>
         <tbody>
@@ -26,7 +26,16 @@ export function LedgerPanel({ ledger }: { ledger: PaymentRecord[] }) {
               </td>
               <td className="mono">{p.memo}</td>
               <td className="sub">
-                {p.rejectReason ?? p.mockLabel ?? "—"}
+                {p.rationale ? (
+                  <>
+                    <div>
+                      <strong>{p.rationale.headline}</strong>
+                    </div>
+                    <div style={{ marginTop: 4 }}>{p.rationale.narrative}</div>
+                  </>
+                ) : (
+                  (p.rejectReason ?? p.mockLabel ?? "—")
+                )}
               </td>
             </tr>
           ))}

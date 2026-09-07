@@ -1,26 +1,35 @@
 import { AgentOsFacade } from "../adapters/agentOsFacade.js";
 import { X402_DOCUMENTED_DAILY_CAP_USD } from "../core/risk.js";
 import { describeAgents } from "../core/agents.js";
+import { envStr } from "../core/env.js";
+import { explainRunSummary } from "../core/reasoning.js";
 import { runDemoScenario, summarizePayment } from "../core/workflow.js";
 
 async function main(): Promise<void> {
+  const mode = envStr("PAYPULSE_MODE", "live").toLowerCase();
   console.log("===========================================================");
-  console.log(" PayPulse DEMO — Track A / Binance Agent OS Mini Hackathon");
-  console.log(" Payment Workflows: A2A via x402 + MCP settlement context");
+  console.log(" PayPulse LIVE smoke — Track A / Binance Agent OS");
+  console.log(" A2A payments: intent → quote → confirm → settle (x402)");
+  console.log(" MCP: balances / settlement context (host-flexible OAuth)");
   console.log("===========================================================");
   console.log("Agents:", describeAgents());
+  console.log("PAYPULSE_MODE:", mode, "(default live)");
   console.log("");
 
-  const facade = new AgentOsFacade({ mode: "paper" });
+  // Drive adapters from env (default live). Do not force paper.
+  const facade = new AgentOsFacade();
   const status = facade.dualStatus();
   console.log("-- Dual-rail Agent OS --");
   console.log(`  x402: ${status.x402.endpoint}`);
+  console.log(`        mode=${status.x402.mode}`);
   console.log(
     `        documented daily cap=$${status.x402.documentedDailyCapUsd} (default, not a guarantee)`
   );
   console.log(`        ${status.x402.label}`);
   console.log(`  MCP:  ${status.mcp.endpoint}`);
-  console.log(`        oauth_client_id=${status.mcp.oauthClientId}`);
+  console.log(
+    `        oauth_client_id=${status.mcp.oauthClientId} | mode=${status.mcp.mode}`
+  );
   console.log(`        ${status.mcp.label}`);
   console.log("");
 
@@ -29,10 +38,20 @@ async function main(): Promise<void> {
   console.log("-- A2A payment ledger --");
   for (const p of result.ledger) {
     console.log(`  ${summarizePayment(p)}`);
+    if (p.rationale?.narrative) {
+      console.log(`         rationale: ${p.rationale.narrative}`);
+    }
   }
   console.log("");
 
-  console.log("-- Settlement context (MCP paper) --");
+  console.log("-- Payment rationales (why pay / why reject) --");
+  for (const r of result.rationales) {
+    console.log(`  [${r.decision}] ${r.headline}`);
+    for (const f of r.factors.slice(0, 4)) console.log(`         - ${f}`);
+  }
+  console.log("");
+
+  console.log("-- Settlement context (MCP) --");
   console.log(
     `  buyer USDT=${result.settlement.buyerBalanceUsdt} USDC=${result.settlement.buyerBalanceUsdc}`
   );
@@ -53,27 +72,74 @@ async function main(): Promise<void> {
     `  x402 documented default cap: $${X402_DOCUMENTED_DAILY_CAP_USD}/day (not a guarantee)`
   );
   console.log("");
+  console.log(
+    "-- Summary --\n ",
+    explainRunSummary({
+      mode: result.mode,
+      payments: result.ledger,
+      attemptCount: result.attemptCount,
+      rejectedCount: result.rejectedCount,
+      successCount: result.successCount,
+    })
+  );
+  console.log("");
 
-  const ok =
-    result.successCount >= 2 &&
-    result.rejectedCount >= 1 &&
-    result.ledger.some((p) => p.status === "CONFIRMED_PAPER") &&
-    result.ledger.some((p) => p.status === "REJECTED" || p.status === "FAILED");
+  const liveDefault = facade.mode === "live" || mode === "live";
+  const attemptsOk = result.attemptCount >= 2;
+  const riskRejectOk = result.ledger.some(
+    (p) =>
+      p.status === "REJECTED" &&
+      (p.rejectReason?.includes("exceeds") ||
+        p.rejectReason?.includes("cap") ||
+        p.rejectReason?.includes("KILL_SWITCH") ||
+        p.mockLabel?.includes("REJECTED by risk"))
+  );
+  const honestLive = result.ledger.every((p) => p.status !== "CONFIRMED_PAPER");
+  const honestStatuses = result.ledger.every((p) =>
+    [
+      "PENDING",
+      "QUOTED",
+      "AWAITING_CONFIRM",
+      "REJECTED",
+      "FAILED",
+      "SUBMITTED_MOCK",
+      "CONFIRMED_PAPER",
+    ].includes(p.status)
+  );
 
-  if (!ok) {
-    console.error("DEMO FAIL — expected >=2 successful paper A2A + >=1 rejected (over cap)");
+  // Live must never claim paper fills
+  if (facade.mode === "live" && !honestLive) {
+    console.error("DEMO FAIL — live mode must not report CONFIRMED_PAPER");
+    process.exit(1);
+  }
+  if (!attemptsOk) {
     console.error(
-      `  successCount=${result.successCount} rejectedCount=${result.rejectedCount}`
+      `DEMO FAIL — expected >=2 payment attempts, got attemptCount=${result.attemptCount}`
     );
+    process.exit(1);
+  }
+  if (!riskRejectOk) {
+    console.error("DEMO FAIL — expected >=1 risk reject (over cap / kill)");
+    process.exit(1);
+  }
+  if (!honestStatuses) {
+    console.error("DEMO FAIL — unexpected payment status in ledger");
+    process.exit(1);
+  }
+  if (!liveDefault && mode !== "paper" && mode !== "mock") {
+    console.error("DEMO FAIL — expected live mode (or explicit paper/mock opt-in)");
     process.exit(1);
   }
 
   console.log("DEMO PASS");
   console.log(
-    `  ${result.successCount} successful paper A2A payment(s), ${result.rejectedCount} rejected (over cap / risk)`
+    `  ${result.attemptCount} payment attempt(s), ${result.rejectedCount} rejected, paper/mock fills=${result.successCount}`
   );
-  console.log("  Workflow: intent → quote → confirm → settle (PAPER/SIM)");
-  console.log("  No secrets. No withdrawals. Mocks labeled when used.");
+  console.log("  Workflow: intent → quote → confirm → settle via x402");
+  console.log(
+    "  Note: LIVE PENDING / auth REJECTED are expected without interactive wallet/MCP OAuth."
+  );
+  console.log("  No secrets. No withdrawals. No fake live settles.");
 }
 
 main().catch((e) => {

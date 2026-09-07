@@ -55,6 +55,14 @@ export interface PaymentQuote {
   label: string;
 }
 
+/** Explainable payment rationale — template rules, no LLM required */
+export interface PaymentRationale {
+  headline: string;
+  narrative: string;
+  factors: string[];
+  decision: "pay" | "reject" | "pending" | "awaiting_confirm";
+}
+
 export interface PaymentRecord {
   id: string;
   intentId: string;
@@ -73,6 +81,7 @@ export interface PaymentRecord {
   requiresConfirm: boolean;
   settledAt?: string;
   usedMock: boolean;
+  rationale?: PaymentRationale;
 }
 
 export interface RiskConfig {
@@ -92,12 +101,14 @@ export interface RiskCheckResult {
 export interface DualAdapterMeta {
   mode: string;
   x402: {
+    mode: string;
     endpoint: string;
     usedMock: boolean;
     label: string;
     documentedDailyCapUsd: number;
   };
   mcp: {
+    mode: string;
     endpoint: string;
     oauthClientId: string;
     usedMock: boolean;
@@ -131,6 +142,10 @@ export interface DemoRunResult {
   ledger: PaymentRecord[];
   adapterMeta: DualAdapterMeta;
   settlement: SettlementContext;
+  /** Paper/mock fills only — never counts live PENDING as a fill */
   successCount: number;
   rejectedCount: number;
+  /** Workflow attempts that reached quote/settle or were risk-rejected */
+  attemptCount: number;
+  rationales: PaymentRationale[];
 }

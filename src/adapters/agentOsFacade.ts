@@ -2,6 +2,8 @@
  * Dual-rail facade for PayPulse:
  *  - x402 programmable payments (intent → quote → confirm → settle)
  *  - MCP agentic for account / settlement context
+ *
+ * Default mode: live (PAYPULSE_MODE=live). Paper/mock are explicit opt-in.
  */
 import type { DualAdapterMeta } from "../core/types.js";
 import { envStr } from "../core/env.js";
@@ -11,9 +13,9 @@ import { McpAgenticAdapter, type AdapterMode as MMode } from "./mcpAgentic.js";
 export type FacadeMode = XMode & MMode;
 
 function modeFromEnv(): FacadeMode {
-  const m = envStr("PAYPULSE_MODE", "paper").toLowerCase();
+  const m = envStr("PAYPULSE_MODE", "live").toLowerCase();
   if (m === "live" || m === "mock" || m === "paper") return m;
-  return "paper";
+  return "live";
 }
 
 export class AgentOsFacade {
@@ -33,12 +35,14 @@ export class AgentOsFacade {
     return {
       mode: this.mode,
       x402: {
+        mode: this.mode,
         endpoint: x.endpoint,
         usedMock: x.usedMock,
         label: x.label,
         documentedDailyCapUsd: x.documentedDailyCapUsd,
       },
       mcp: {
+        mode: this.mode,
         endpoint: m.endpoint,
         oauthClientId: m.oauthClientId,
         usedMock: m.usedMock,

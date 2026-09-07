@@ -1,11 +1,13 @@
 /**
- * Binance x402 programmable payments adapter (paper/mock default).
+ * Binance x402 programmable payments adapter.
  *
  * Product page: https://www.binance.com/binancex402
  * Documented default daily cap: $20 / day — labeled as documented default, NOT a guarantee.
  * Confirm live quotas in Binance App / wallet settings.
  *
- * No withdrawals. Paper/sim settles locally; mock path is explicitly labeled.
+ * Default: live (PAYPULSE_MODE=live). Paper/mock are explicit opt-in only.
+ * Live path returns PENDING / AWAITING_CONFIRM / REJECTED honestly —
+ * never silent CONFIRMED_PAPER as live success. No withdrawals.
  */
 import { envNum, envStr } from "../core/env.js";
 import type {
@@ -32,9 +34,9 @@ export interface X402AdapterResult<T> {
 }
 
 function modeFromEnv(): AdapterMode {
-  const m = envStr("PAYPULSE_MODE", "paper").toLowerCase();
+  const m = envStr("PAYPULSE_MODE", "live").toLowerCase();
   if (m === "live" || m === "mock" || m === "paper") return m;
-  return "paper";
+  return "live";
 }
 
 function uid(prefix: string): string {
@@ -43,7 +45,7 @@ function uid(prefix: string): string {
 
 /**
  * Probe x402 page reachability. Live settlement needs wallet/OAuth host —
- * bare fetch rarely equals a real payment rail, so we fall back to paper/mock.
+ * bare fetch rarely equals a real payment rail.
  */
 async function tryX402Reachable(endpoint: string): Promise<boolean> {
   try {
@@ -52,7 +54,7 @@ async function tryX402Reachable(endpoint: string): Promise<boolean> {
       signal: AbortSignal.timeout(2500),
       redirect: "follow",
     });
-    return res.ok || res.status === 301 || res.status === 302;
+    return res.ok || res.status === 301 || res.status === 302 || res.status === 401 || res.status === 403;
   } catch {
     return false;
   }
@@ -62,7 +64,7 @@ export class X402PaymentsAdapter {
   readonly mode: AdapterMode;
   readonly endpoint: string;
   readonly documentedDailyCapUsd: number;
-  private lastLabel = "PAPER SIM — local x402-style settlement (not live Binance)";
+  private lastLabel = "LIVE x402 — awaiting settle / host confirm (default mode)";
   private lastUsedMock = false;
 
   constructor(opts?: { mode?: AdapterMode }) {
@@ -72,6 +74,11 @@ export class X402PaymentsAdapter {
       "X402_DOCUMENTED_DAILY_CAP_USD",
       X402_DOCUMENTED_DAILY_CAP_USD
     );
+    if (this.mode === "paper") {
+      this.lastLabel = "PAPER SIM (opt-in) — local x402-style settlement (not live Binance)";
+    } else if (this.mode === "mock") {
+      this.lastLabel = "MOCK (opt-in) — explicit mock x402 path; not live Binance";
+    }
   }
 
   status(): X402AdapterResult<null> {
@@ -102,11 +109,17 @@ export class X402PaymentsAdapter {
       serviceId: input.serviceId,
       createdAt: new Date().toISOString(),
     };
-    this.lastUsedMock = false;
-    this.lastLabel = "PAPER SIM — payment intent created locally (x402-style)";
+    this.lastUsedMock = this.mode === "mock";
+    if (this.mode === "paper") {
+      this.lastLabel = "PAPER SIM — payment intent created locally (x402-style)";
+    } else if (this.mode === "mock") {
+      this.lastLabel = "MOCK — payment intent (explicit mock mode)";
+    } else {
+      this.lastLabel = "LIVE — payment intent prepared for x402 rail (settle still needs wallet/host)";
+    }
     return {
       data: intent,
-      usedMock: false,
+      usedMock: this.lastUsedMock,
       label: this.lastLabel,
       endpoint: this.endpoint,
       documentedDailyCapUsd: this.documentedDailyCapUsd,
@@ -114,7 +127,13 @@ export class X402PaymentsAdapter {
   }
 
   async quote(intent: PaymentIntent): Promise<X402AdapterResult<PaymentQuote>> {
-    const feeUsd = Math.round(intent.amount * 0.001 * 10000) / 10000; // 0.1% paper fee
+    const feeUsd = Math.round(intent.amount * 0.001 * 10000) / 10000; // 0.1% illustrative fee
+    const quoteLabel =
+      this.mode === "paper"
+        ? "PAPER SIM — x402-style quote (not live)"
+        : this.mode === "mock"
+          ? "MOCK — x402-style quote (not live)"
+          : "LIVE — x402-style quote prepared (not a filled payment)";
     const quote: PaymentQuote = {
       intentId: intent.id,
       quoteId: uid("quote"),
@@ -124,13 +143,13 @@ export class X402PaymentsAdapter {
       totalUsd: intent.amount + feeUsd,
       expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
       rail: "x402",
-      label: "PAPER SIM — x402-style quote (not live)",
+      label: quoteLabel,
     };
-    this.lastUsedMock = false;
+    this.lastUsedMock = this.mode === "mock";
     this.lastLabel = quote.label;
     return {
       data: quote,
-      usedMock: false,
+      usedMock: this.lastUsedMock,
       label: this.lastLabel,
       endpoint: this.endpoint,
       documentedDailyCapUsd: this.documentedDailyCapUsd,
@@ -138,8 +157,10 @@ export class X402PaymentsAdapter {
   }
 
   /**
-   * Settle after risk + confirm. Paper fills locally.
-   * Live attempts probe; on failure returns labeled MOCK (never silent live claim).
+   * Settle after risk + confirm.
+   * - paper: CONFIRMED_PAPER (local ledger only)
+   * - mock: SUBMITTED_MOCK (explicit opt-in)
+   * - live: PENDING / AWAITING_CONFIRM / REJECTED — never CONFIRMED_PAPER
    */
   async settle(
     intent: PaymentIntent,
@@ -148,7 +169,7 @@ export class X402PaymentsAdapter {
   ): Promise<X402AdapterResult<{ status: PaymentStatus; settledAt?: string; note: string }>> {
     if (opts.requireConfirm && !opts.confirmed) {
       this.lastUsedMock = false;
-      this.lastLabel = "AWAITING_CONFIRM — require confirm is on";
+      this.lastLabel = "AWAITING_CONFIRM — require confirm is on; not settled";
       return {
         data: { status: "AWAITING_CONFIRM", note: "confirmation required before settle" },
         usedMock: false,
@@ -190,36 +211,32 @@ export class X402PaymentsAdapter {
       };
     }
 
-    // live attempt — usually unavailable in-process without wallet OAuth
+    // LIVE — honest statuses only (never CONFIRMED_PAPER / silent mock-as-success)
     const reachable = await tryX402Reachable(this.endpoint);
     if (!reachable) {
-      this.lastUsedMock = true;
+      this.lastUsedMock = false;
       this.lastLabel =
-        "MOCK — live x402 unreachable in-process; not a live Binance payment";
+        "LIVE x402 REJECTED — wallet/hub unreachable in-process; authenticate via Binance Wallet / MCP host. Not a paper fill.";
       return {
         data: {
-          status: "SUBMITTED_MOCK",
-          settledAt: new Date().toISOString(),
-          note: "fell back to MOCK after live probe failed",
+          status: "REJECTED",
+          note: "LIVE auth/hub required — open Binance x402 / Agentic Wallet. Not a paper or mock fill.",
         },
-        usedMock: true,
+        usedMock: false,
         label: this.lastLabel,
         endpoint: this.endpoint,
         documentedDailyCapUsd: this.documentedDailyCapUsd,
       };
     }
 
-    // Even if page is reachable, we do not invent live settlement without wallet auth
-    this.lastUsedMock = true;
-    this.lastLabel =
-      "MOCK — x402 page reachable but no wallet OAuth in-process; labeled MOCK (not live)";
+    this.lastUsedMock = false;
+    this.lastLabel = `LIVE x402 PENDING — quote ${quote.quoteId} awaiting wallet/hub confirm; not a filled payment`;
     return {
       data: {
-        status: "SUBMITTED_MOCK",
-        settledAt: new Date().toISOString(),
-        note: `quote ${quote.quoteId} would need Binance wallet confirm; MOCK only`,
+        status: "PENDING",
+        note: `LIVE pending confirm for ${intent.amount} ${intent.asset}; documented daily cap $${this.documentedDailyCapUsd} (default, not guarantee). Not CONFIRMED_PAPER.`,
       },
-      usedMock: true,
+      usedMock: false,
       label: this.lastLabel,
       endpoint: this.endpoint,
       documentedDailyCapUsd: this.documentedDailyCapUsd,
@@ -242,7 +259,10 @@ export class X402PaymentsAdapter {
       updatedAt: now,
       requiresConfirm: requireConfirm,
       usedMock: false,
-      mockLabel: "PENDING — x402-style intent",
+      mockLabel:
+        this.mode === "live"
+          ? "PENDING — LIVE x402-style intent"
+          : "PENDING — x402-style intent",
     };
   }
 }

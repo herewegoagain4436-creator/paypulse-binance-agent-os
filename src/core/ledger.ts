@@ -1,6 +1,6 @@
 import type { PaymentRecord, PaymentStatus } from "./types.js";
 
-/** In-memory A2A payment ledger (paper/sim). */
+/** In-memory A2A payment ledger. */
 export class PaymentLedger {
   private records: PaymentRecord[] = [];
 
@@ -29,6 +29,7 @@ export class PaymentLedger {
     return record;
   }
 
+  /** Only paper/mock fills count toward daily spend — live PENDING is not a fill. */
   dailySpendUsd(fromAgentId?: string, dayIso = new Date().toISOString().slice(0, 10)): number {
     return this.records
       .filter((r) => {
@@ -49,5 +50,9 @@ export class PaymentLedger {
     return this.records.filter(
       (r) => r.status === "FAILED" || r.status === "REJECTED"
     ).length;
+  }
+
+  attemptCount(): number {
+    return this.records.length;
   }
 }
