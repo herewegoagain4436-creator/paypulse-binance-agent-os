@@ -1,17 +1,17 @@
 # PayPulse — Demo Video
 
 **File:** `demo/paypulse-demo.mp4`
-**Resolution:** 1280x720 · H.264 · silent
-**Duration:** ~99 seconds (target 1–3 min)
+**Re-record after the x402 loop:** paper delivery is the product demo; live is honest PENDING.
 
-## What the video shows
+## What the video should show
 
-1. **Title** — PayPulse Track A; Paper/sim — not live B402
-2. **Real CLI** — demo transcript with DEMO PASS (2 paper A2A + 1 reject)
-3. **Dashboard** — Vite UI ready → after Run A2A demo → ledger/settlement
-4. **End card** — DEMO PASS + docs pointer
+1. **Title** — PayPulse A2A x402 (HTTP 402 → preview → sign → replay)
+2. **CLI** — `npm run demo:paper` → two DELIVERED + one REJECT, DEMO PASS
+3. **curl** — `GET /svc/market-brief` → HTTP 402
+4. **Dashboard** — Quote → Confirm → delivered brief; quota + payTo
+5. **End card** — live never paper-fills; no secrets; no withdrawals
 
 ## Notes
 
-- CLI transcript: `demo/demo-output.txt`
-- No secrets; paper/sim only; no withdrawals
+- CLI transcript: `demo/demo-output.txt` (regenerate with `npm run demo:paper`)
+- Do not title the video as paper-only if you also show live PENDING

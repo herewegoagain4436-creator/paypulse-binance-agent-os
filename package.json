@@ -1,15 +1,17 @@
 {
   "name": "paypulse",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
-  "description": "PayPulse — Agent-to-Agent payment workflows via Binance x402 + Agent OS MCP (Track A Mini Hackathon)",
+  "description": "PayPulse — Agent-to-agent x402 payments (HTTP 402 → preview → sign → replay) with Binance Agent OS",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "preview": "vite preview",
-    "demo": "tsx src/cli/demo.ts",
     "cli": "tsx src/cli/index.ts",
+    "seller": "tsx src/server/listen.ts",
+    "mcp": "tsx src/mcp/stdio.ts",
+    "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
@@ -23,6 +25,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
-    "vite": "^6.0.3"
+    "vite": "^6.0.3",
+    "vitest": "^3.2.4"
   }
 }

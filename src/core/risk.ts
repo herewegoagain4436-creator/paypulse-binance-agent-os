@@ -1,8 +1,15 @@
 import { envBool, envNum } from "./env.js";
-import type { PaymentIntent, RiskCheckResult, RiskConfig } from "./types.js";
+import type {
+  PaymentIntent,
+  QuotaSnapshot,
+  RiskCheckResult,
+  RiskConfig,
+} from "./types.js";
 
 /** Documented Binance x402 default daily cap (USD). Not a guarantee — confirm in App. */
 export const X402_DOCUMENTED_DAILY_CAP_USD = 20;
+
+const ASSETS = new Set(["USDT", "USDC", "U", "USD1"]);
 
 export function loadRiskConfig(): RiskConfig {
   return {
@@ -17,14 +24,11 @@ export function loadRiskConfig(): RiskConfig {
   };
 }
 
-/**
- * Evaluate payment against local risk gates AND documented x402 daily cap.
- * The documented x402 cap is labeled as a public default, not a contractual SLA.
- */
 export function checkPaymentRisk(
   intent: PaymentIntent,
   dailySpendUsedUsd: number,
-  cfg: RiskConfig = loadRiskConfig()
+  cfg: RiskConfig = loadRiskConfig(),
+  quota?: QuotaSnapshot
 ): RiskCheckResult {
   const reasons: string[] = [];
 
@@ -45,14 +49,20 @@ export function checkPaymentRisk(
   const projected = dailySpendUsedUsd + intent.amount;
   if (projected > cfg.dailySpendCapUsd) {
     reasons.push(
-      `projected daily spend $${projected.toFixed(2)} exceeds local daily spend cap $${cfg.dailySpendCapUsd}`
+      `projected daily spend $${projected.toFixed(2)} exceeds local daily spend cap $${cfg.dailySpendCapUsd} (includes reserved PENDING)`
     );
   }
 
-  // Documented Binance x402 default — labeled, not invented as a guarantee
-  if (projected > cfg.x402DocumentedDailyCapUsd) {
+  const documentedCap = quota?.dailyLimit ?? cfg.x402DocumentedDailyCapUsd;
+  if (projected > documentedCap) {
     reasons.push(
-      `projected daily spend $${projected.toFixed(2)} exceeds documented x402 daily default cap $${cfg.x402DocumentedDailyCapUsd} (documented default, not a guarantee — confirm in Binance App)`
+      `projected daily spend $${projected.toFixed(2)} exceeds documented x402 daily default cap $${documentedCap} (documented default, not a guarantee — confirm in Binance App)`
+    );
+  }
+
+  if (quota && quota.source === "baw-wallet-settings" && intent.amount > quota.left) {
+    reasons.push(
+      `amount $${intent.amount} exceeds live x402QuotaLeft $${quota.left} (baw wallet settings)`
     );
   }
 
@@ -64,8 +74,12 @@ export function checkPaymentRisk(
     reasons.push("buyer and seller must be different agents");
   }
 
-  if (intent.asset !== "USDT" && intent.asset !== "USDC") {
-    reasons.push("asset must be USDT or USDC");
+  if (!ASSETS.has(intent.asset)) {
+    reasons.push("asset must be USDT, USDC, U, or USD1");
+  }
+
+  if (!intent.resourceUrl) {
+    reasons.push("resourceUrl required for x402 402 flow");
   }
 
   return { ok: reasons.length === 0, reasons };

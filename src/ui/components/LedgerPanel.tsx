@@ -10,8 +10,8 @@ export function LedgerPanel({ ledger }: { ledger: PaymentRecord[] }) {
             <th>Status</th>
             <th>From → To</th>
             <th>Amount</th>
-            <th>Memo</th>
-            <th>Rationale / label</th>
+            <th>Resource / tx</th>
+            <th>Rationale / delivery</th>
           </tr>
         </thead>
         <tbody>
@@ -24,7 +24,11 @@ export function LedgerPanel({ ledger }: { ledger: PaymentRecord[] }) {
               <td className="mono">
                 {p.amount} {p.asset}
               </td>
-              <td className="mono">{p.memo}</td>
+              <td className="mono">
+                <div>{p.resourceUrl ?? p.memo}</div>
+                {p.payTo ? <div className="sub">payTo {p.payTo}</div> : null}
+                {p.txHash ? <div className="sub">tx {p.txHash}</div> : null}
+              </td>
               <td className="sub">
                 {p.rationale ? (
                   <>
@@ -36,6 +40,9 @@ export function LedgerPanel({ ledger }: { ledger: PaymentRecord[] }) {
                 ) : (
                   (p.rejectReason ?? p.mockLabel ?? "—")
                 )}
+                {p.delivery ? (
+                  <pre className="delivery">{p.delivery.body.slice(0, 600)}</pre>
+                ) : null}
               </td>
             </tr>
           ))}

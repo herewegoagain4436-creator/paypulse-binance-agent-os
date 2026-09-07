@@ -12,6 +12,7 @@ export function AgentsPanel({ agents }: { agents: AgentProfile[] }) {
             <th>Role</th>
             <th>USDT</th>
             <th>USDC</th>
+            <th>payTo</th>
           </tr>
         </thead>
         <tbody>
@@ -29,6 +30,7 @@ export function AgentsPanel({ agents }: { agents: AgentProfile[] }) {
               </td>
               <td className="mono">{a.paperBalanceUsdt}</td>
               <td className="mono">{a.paperBalanceUsdc}</td>
+              <td className="mono">{a.payTo?.address ?? "—"}</td>
             </tr>
           ))}
         </tbody>

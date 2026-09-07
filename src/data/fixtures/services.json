@@ -6,7 +6,9 @@
     "description": "One-page overnight movers + key levels for BTC and ETH",
     "priceUsd": 5,
     "asset": "USDT",
-    "memoHint": "market-brief-btc-eth"
+    "memoHint": "market-brief-btc-eth",
+    "mimeType": "text/markdown",
+    "path": "/svc/market-brief"
   },
   {
     "id": "svc-signal-pack",
@@ -15,7 +17,9 @@
     "description": "Paper signal pack for SOL, BNB, AVAX — educational only",
     "priceUsd": 8,
     "asset": "USDC",
-    "memoHint": "signal-pack-intraday"
+    "memoHint": "signal-pack-intraday",
+    "mimeType": "application/json",
+    "path": "/svc/signal-pack"
   },
   {
     "id": "svc-oversize-audit",
@@ -24,6 +28,9 @@
     "description": "Intentionally priced above daily/x402 caps to demo risk rejection",
     "priceUsd": 25,
     "asset": "USDT",
-    "memoHint": "oversize-audit-reject"
+    "memoHint": "oversize-audit-reject",
+    "mimeType": "text/plain",
+    "path": "/svc/oversize-audit",
+    "demo": true
   }
 ]

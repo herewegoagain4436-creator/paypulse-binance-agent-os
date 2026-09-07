@@ -1,6 +1,5 @@
 /**
- * Thin explainable payment rationales — template rules, no LLM required.
- * Answers "why pay" / "why reject" for judges (CLI + dashboard).
+ * Explainable payment rationales — template rules, no LLM required.
  */
 import type {
   PaymentAsset,
@@ -15,7 +14,6 @@ function money(n: number, asset?: PaymentAsset): string {
   return asset ? `$${n} ${asset}` : `$${n}`;
 }
 
-/** Why this A2A payment was attempted (service / memo / balances). */
 export function explainWhyPay(opts: {
   amount: number;
   asset: PaymentAsset;
@@ -29,21 +27,19 @@ export function explainWhyPay(opts: {
     ? `service "${opts.service.title}" (${opts.service.id})`
     : `memo "${opts.memo}"`;
   const bal = opts.settlement
-    ? ` Buyer seed USDT=${opts.settlement.buyerBalanceUsdt}, daily left≈$${opts.settlement.dailySpendLeftUsd}.`
+    ? ` Buyer seed USDT=${opts.settlement.buyerBalanceUsdt}, reserved+filled daily≈$${(opts.settlement.dailySpendUsedUsd).toFixed(2)}, left≈$${opts.settlement.dailySpendLeftUsd}.`
     : "";
   return (
     `${opts.fromAgentId} pays ${opts.toAgentId} ${money(opts.amount, opts.asset)} for ${svc} ` +
-    `via x402 (intent → quote → confirm → settle).${bal}`
+    `via x402 (HTTP 402 → preview → sign → replay).${bal}`
   );
 }
 
-/** Why risk / live path rejected or blocked. */
 export function explainWhyReject(reasons: string[]): string {
   if (!reasons.length) return "Rejected with no detailed reasons.";
   return `Rejected because: ${reasons.join("; ")}.`;
 }
 
-/** Build a structured NL rationale for one payment record. */
 export function explainPayment(
   payment: PaymentRecord,
   opts?: {
@@ -58,6 +54,10 @@ export function explainPayment(
     `status=${payment.status}`,
     `rail=x402`,
   ];
+  if (payment.resourceUrl) factors.push(`resource=${payment.resourceUrl}`);
+  if (payment.payTo) factors.push(`payTo=${payment.payTo}`);
+  if (payment.txHash) factors.push(`txHash=${payment.txHash}`);
+  if (payment.facilitator) factors.push(`facilitator=${payment.facilitator}`);
   if (payment.memo) factors.push(`memo=${payment.memo}`);
   if (opts?.service) factors.push(`service=${opts.service.title}`);
   if (opts?.settlement) {
@@ -103,7 +103,7 @@ export function explainPayment(
       decision = "awaiting_confirm";
       headline = `AWAITING_CONFIRM — ${payment.amount} ${payment.asset}`;
       outcome =
-        "Risk cleared; confirm gate is on. Pass confirm=true (or disable REQUIRE_CONFIRM) to proceed to settle. Not a live fill yet.";
+        "Risk cleared; confirm gate is on. Confirm to sign the x402 payment. Not a live fill yet.";
       break;
     case "PENDING":
     case "QUOTED":
@@ -111,14 +111,22 @@ export function explainPayment(
       headline = `${payment.status} — ${payment.amount} ${payment.asset} (honest live/path status)`;
       outcome =
         payment.status === "PENDING" && payment.stage === "settle"
-          ? "Live x402 settle acknowledged as PENDING — awaiting wallet/hub confirm. Not CONFIRMED_PAPER."
-          : "Payment workflow in progress (intent/quote). Settlement not claimed as filled.";
+          ? "Live x402 replay did not unlock the resource (needs B402 merchant verify/settle or a signed-in baw session). Not CONFIRMED_PAPER."
+          : "Payment workflow in progress (402 quote / preview). Settlement not claimed as filled.";
       break;
+    case "DELIVERED":
     case "CONFIRMED_PAPER":
       decision = "pay";
-      headline = `PAPER PAY — ${payment.amount} ${payment.asset} (explicit paper mode)`;
+      headline = `PAPER DELIVERED — ${payment.amount} ${payment.asset}`;
       outcome =
-        "Paper/sim settle on local ledger only. Not a live Binance x402 payment.";
+        "Local HMAC facilitator verified the PAYMENT-SIGNATURE and unlocked the resource. Not a live Binance on-chain payment.";
+      break;
+    case "SETTLED":
+      decision = "pay";
+      headline = `SETTLED — ${payment.amount} ${payment.asset}`;
+      outcome = payment.txHash
+        ? `On-chain/wallet settle recorded txHash=${payment.txHash}.`
+        : "Marked settled with a wallet PAYMENT-SIGNATURE.";
       break;
     case "SUBMITTED_MOCK":
       decision = "pay";
@@ -132,11 +140,9 @@ export function explainPayment(
   }
 
   const narrative = [whyPay, outcome, "Rules rationale — no LLM required."].join(" ");
-
   return { headline, narrative, factors, decision };
 }
 
-/** Short run-level narrative for CLI / dashboard. */
 export function explainRunSummary(opts: {
   mode: string;
   payments: PaymentRecord[];
@@ -147,10 +153,11 @@ export function explainRunSummary(opts: {
   const pending = opts.payments.filter(
     (p) => p.status === "PENDING" || p.status === "AWAITING_CONFIRM" || p.status === "QUOTED"
   ).length;
+  const delivered = opts.payments.filter((p) => p.delivery).length;
   return [
-    `Mode=${opts.mode}. A2A workflow attempts=${opts.attemptCount}; paper/mock fills=${opts.successCount}; rejected=${opts.rejectedCount}; pending-ish=${pending}.`,
-    "Story: intent → quote → confirm → settle via x402; MCP for balances/context.",
-    "Documented x402 daily default ~$20 — labeled default, not a guarantee.",
+    `Mode=${opts.mode}. A2A workflow attempts=${opts.attemptCount}; fills=${opts.successCount}; rejected=${opts.rejectedCount}; pending-ish=${pending}; delivered=${delivered}.`,
+    "Story: HTTP 402 → preview → sign → replay; MCP is context only.",
+    "Documented x402 daily default ~$20 — labeled default, not a guarantee. Live quota from baw wallet settings when signed in.",
     "Rules rationales — no LLM required.",
   ].join(" ");
 }

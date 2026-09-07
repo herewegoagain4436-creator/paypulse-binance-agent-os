@@ -6,25 +6,26 @@ import { explainRunSummary } from "../core/reasoning.js";
 import { runDemoScenario, summarizePayment } from "../core/workflow.js";
 
 async function main(): Promise<void> {
+  if (process.argv.includes("--paper")) process.env.PAYPULSE_MODE = "paper";
+  if (process.argv.includes("--mock")) process.env.PAYPULSE_MODE = "mock";
   const mode = envStr("PAYPULSE_MODE", "live").toLowerCase();
   console.log("===========================================================");
-  console.log(" PayPulse LIVE smoke — Track A / Binance Agent OS");
-  console.log(" A2A payments: intent → quote → confirm → settle (x402)");
-  console.log(" MCP: balances / settlement context (host-flexible OAuth)");
+  console.log(" PayPulse x402 smoke — A2A payments");
+  console.log(" HTTP 402 → preview → sign → replay (deliver on paper)");
+  console.log(" MCP: account/market context only (not the payment rail)");
   console.log("===========================================================");
   console.log("Agents:", describeAgents());
   console.log("PAYPULSE_MODE:", mode, "(default live)");
   console.log("");
 
-  // Drive adapters from env (default live). Do not force paper.
   const facade = new AgentOsFacade();
+  await facade.refreshLive();
   const status = facade.dualStatus();
   console.log("-- Dual-rail Agent OS --");
-  console.log(`  x402: ${status.x402.endpoint}`);
+  console.log(`  x402: ${status.x402.productUrl}`);
   console.log(`        mode=${status.x402.mode}`);
-  console.log(
-    `        documented daily cap=$${status.x402.documentedDailyCapUsd} (default, not a guarantee)`
-  );
+  console.log(`        quota: ${status.x402.quota.label}`);
+  console.log(`        wallet: ${status.x402.wallet.label}`);
   console.log(`        ${status.x402.label}`);
   console.log(`  MCP:  ${status.mcp.endpoint}`);
   console.log(
@@ -33,7 +34,7 @@ async function main(): Promise<void> {
   console.log(`        ${status.mcp.label}`);
   console.log("");
 
-  const result = await runDemoScenario();
+  const result = await runDemoScenario({ facade, persist: false, confirm: true });
 
   console.log("-- A2A payment ledger --");
   for (const p of result.ledger) {
@@ -41,17 +42,20 @@ async function main(): Promise<void> {
     if (p.rationale?.narrative) {
       console.log(`         rationale: ${p.rationale.narrative}`);
     }
+    if (p.delivery) {
+      console.log(`         delivered ${p.delivery.mimeType} (${p.delivery.body.length} chars)`);
+    }
   }
   console.log("");
 
   console.log("-- Payment rationales (why pay / why reject) --");
   for (const r of result.rationales) {
     console.log(`  [${r.decision}] ${r.headline}`);
-    for (const f of r.factors.slice(0, 4)) console.log(`         - ${f}`);
+    for (const f of r.factors.slice(0, 5)) console.log(`         - ${f}`);
   }
   console.log("");
 
-  console.log("-- Settlement context (MCP) --");
+  console.log("-- Settlement context --");
   console.log(
     `  buyer USDT=${result.settlement.buyerBalanceUsdt} USDC=${result.settlement.buyerBalanceUsdc}`
   );
@@ -59,9 +63,9 @@ async function main(): Promise<void> {
     `  seller USDT=${result.settlement.sellerBalanceUsdt} USDC=${result.settlement.sellerBalanceUsdc}`
   );
   console.log(
-    `  daily spend used=$${result.settlement.dailySpendUsedUsd} left=$${result.settlement.dailySpendLeftUsd}`
+    `  daily used=$${result.settlement.dailySpendUsedUsd} reserved=$${result.settlement.dailySpendReservedUsd} left=$${result.settlement.dailySpendLeftUsd}`
   );
-  console.log(`  source=${result.settlement.source} usedMock=${result.settlement.usedMock}`);
+  console.log(`  source=${result.settlement.source} quota=${result.settlement.quota.source}`);
   console.log("");
 
   console.log("-- Adapter meta --");
@@ -84,7 +88,6 @@ async function main(): Promise<void> {
   );
   console.log("");
 
-  const liveDefault = facade.mode === "live" || mode === "live";
   const attemptsOk = result.attemptCount >= 2;
   const riskRejectOk = result.ledger.some(
     (p) =>
@@ -94,22 +97,26 @@ async function main(): Promise<void> {
         p.rejectReason?.includes("KILL_SWITCH") ||
         p.mockLabel?.includes("REJECTED by risk"))
   );
-  const honestLive = result.ledger.every((p) => p.status !== "CONFIRMED_PAPER");
-  const honestStatuses = result.ledger.every((p) =>
-    [
-      "PENDING",
-      "QUOTED",
-      "AWAITING_CONFIRM",
-      "REJECTED",
-      "FAILED",
-      "SUBMITTED_MOCK",
-      "CONFIRMED_PAPER",
-    ].includes(p.status)
-  );
+  const honestLive =
+    facade.mode !== "live" ||
+    result.ledger.every(
+      (p) => p.status !== "CONFIRMED_PAPER" && p.status !== "DELIVERED"
+    );
+  const allowed = new Set([
+    "PENDING",
+    "QUOTED",
+    "AWAITING_CONFIRM",
+    "REJECTED",
+    "FAILED",
+    "SUBMITTED_MOCK",
+    "CONFIRMED_PAPER",
+    "DELIVERED",
+    "SETTLED",
+  ]);
+  const honestStatuses = result.ledger.every((p) => allowed.has(p.status));
 
-  // Live must never claim paper fills
   if (facade.mode === "live" && !honestLive) {
-    console.error("DEMO FAIL — live mode must not report CONFIRMED_PAPER");
+    console.error("DEMO FAIL — live mode must not report CONFIRMED_PAPER / DELIVERED");
     process.exit(1);
   }
   if (!attemptsOk) {
@@ -126,18 +133,14 @@ async function main(): Promise<void> {
     console.error("DEMO FAIL — unexpected payment status in ledger");
     process.exit(1);
   }
-  if (!liveDefault && mode !== "paper" && mode !== "mock") {
-    console.error("DEMO FAIL — expected live mode (or explicit paper/mock opt-in)");
-    process.exit(1);
-  }
 
   console.log("DEMO PASS");
   console.log(
-    `  ${result.attemptCount} payment attempt(s), ${result.rejectedCount} rejected, paper/mock fills=${result.successCount}`
+    `  ${result.attemptCount} payment attempt(s), ${result.rejectedCount} rejected, fills=${result.successCount}, delivered=${result.deliveredCount}`
   );
-  console.log("  Workflow: intent → quote → confirm → settle via x402");
+  console.log("  Workflow: HTTP 402 → preview → sign → replay");
   console.log(
-    "  Note: LIVE PENDING / auth REJECTED are expected without interactive wallet/MCP OAuth."
+    "  Note: LIVE PENDING / auth REJECTED are expected without baw wallet / B402 merchant."
   );
   console.log("  No secrets. No withdrawals. No fake live settles.");
 }

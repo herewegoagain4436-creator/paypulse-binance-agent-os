@@ -13,7 +13,11 @@
     "role": "seller",
     "description": "Sells short-form market briefs via A2A x402 payments",
     "paperBalanceUsdt": 10,
-    "paperBalanceUsdc": 5
+    "paperBalanceUsdc": 5,
+    "payTo": {
+      "network": "eip155:56",
+      "address": "0x8B3a350e2f3E6B9cC6FB10Fd106bA08f08bec5D2"
+    }
   },
   {
     "id": "agent-seller-signals",
@@ -21,6 +25,10 @@
     "role": "seller",
     "description": "Sells curated signal packs to buyer agents",
     "paperBalanceUsdt": 10,
-    "paperBalanceUsdc": 5
+    "paperBalanceUsdc": 5,
+    "payTo": {
+      "network": "eip155:56",
+      "address": "0x1111111111111111111111111111111111111111"
+    }
   }
 ]

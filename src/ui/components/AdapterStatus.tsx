@@ -12,33 +12,29 @@ export function AdapterStatus({ meta }: { meta: DualAdapterMeta }) {
     <div>
       <div className="actions" style={{ marginBottom: 12 }}>
         <ModeBadge mode={meta.mode} />
-        <span className="badge">x402 + MCP dual-rail</span>
+        <span className="badge">x402 HTTP 402 + MCP context</span>
         <span className="badge">
-          x402 cap ${meta.x402.documentedDailyCapUsd}/day (default ≠ guarantee)
+          cap ${meta.x402.quota.dailyLimit}/day ({meta.x402.quota.source})
         </span>
       </div>
       <div className="grid" style={{ marginBottom: 0 }}>
         <div className="card half" style={{ margin: 0 }}>
           <h2>x402 rail (Payments) — {meta.x402.mode}</h2>
-          <p className="mono">{meta.x402.endpoint}</p>
+          <p className="mono">{meta.x402.productUrl}</p>
+          <p className="sub">{meta.x402.label}</p>
           <p className="sub">
-            documented daily cap: ${meta.x402.documentedDailyCapUsd}/day (default, not a
-            guarantee)
+            wallet: {meta.x402.wallet.signedIn ? "signed in" : "not signed in"} —{" "}
+            {meta.x402.wallet.label}
           </p>
-          <p className="sub">
-            usedMock={String(meta.x402.usedMock)} · <strong>{meta.x402.label}</strong>
-          </p>
+          <p className="sub">{meta.x402.quota.label}</p>
         </div>
         <div className="card half" style={{ margin: 0 }}>
-          <h2>MCP rail (Account / context) — {meta.mcp.mode}</h2>
+          <h2>MCP rail (Account / market data) — {meta.mcp.mode}</h2>
           <p className="mono">{meta.mcp.endpoint}</p>
           <p className="sub">
-            oauth_client_id={meta.mcp.oauthClientId} (MCP host–flexible; Grok is one
-            example)
+            oauth_client_id={meta.mcp.oauthClientId} (host-flexible)
           </p>
-          <p className="sub">
-            usedMock={String(meta.mcp.usedMock)} · <strong>{meta.mcp.label}</strong>
-          </p>
+          <p className="sub">{meta.mcp.label}</p>
         </div>
       </div>
     </div>
