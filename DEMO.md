@@ -3,7 +3,7 @@
 ## Quick start
 
 ```bash
-cd /workspace/hackathons/binance-agent-os-payments
+cd paypulse-binance-agent-os
 npm install
 npm run demo
 ```
@@ -27,7 +27,7 @@ Open the Vite URL (default port 5174), click Run A2A demo. Cards show agents, pe
 1. Buyer agent-buyer-alpha pays Brief Seller for a market brief ($5 USDT)
 2. Same buyer pays Signal Pack Seller for an intraday signal pack ($8 USDC)
 3. Oversize deep audit ($25) is REJECTED — exceeds local max payment and documented x402 $20/day default
-4. MCT paper settlement context (balances + daily spend left)
+4. MCP paper settlement context (balances + daily spend left)
 5. Risk gates: max payment, daily spend, kill-switch, require confirm
 
 ## Agent OS (both rails)

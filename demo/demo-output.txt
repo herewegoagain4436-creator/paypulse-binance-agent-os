@@ -1,0 +1,35 @@
+===========================================================
+ PayPulse DEMO — Track A / Binance Agent OS Mini Hackathon
+ Payment Workflows: A2A via x402 + MCP settlement context
+===========================================================
+Agents: agent-buyer-alpha(buyer), agent-seller-brief(seller), agent-seller-signals(seller)
+
+-- Dual-rail Agent OS --
+  x402: https://www.binance.com/binancex402
+        documented daily cap=$20 (default, not a guarantee)
+        PAPER SIM — local x402-style settlement (not live Binance)
+  MCP:  https://agent.binance.com/mcp/agentic
+        oauth_client_id=grok
+        PAPER SIM — MCP settlement context from local paper balances (not live)
+
+-- A2A payment ledger --
+  CONFIRMED_PAPER  agent-buyer-alpha → agent-seller-brief  5 USDT  | PAPER SIM — x402 settle (local ledger; not live Binance)
+  CONFIRMED_PAPER  agent-buyer-alpha → agent-seller-signals  8 USDC  | PAPER SIM — x402 settle (local ledger; not live Binance)
+  REJECTED         agent-buyer-alpha → agent-seller-brief  25 USDT  | amount $25 exceeds max payment size $15; projected daily spend $38.00 exceeds local daily spend cap $20; projected daily spend $38.00 exceeds documented x402 daily default cap $20 (documented default, not a guarantee — confirm in Binance App)
+
+-- Settlement context (MCP paper) --
+  buyer USDT=95 USDC=42
+  seller USDT=15 USDC=5
+  daily spend used=$13 left=$7
+  source=snapshot usedMock=false
+
+-- Adapter meta --
+  mode=paper
+  x402: PAPER SIM — payment intent created locally (x402-style)
+  MCP:  PAPER SIM — MCP context from local paper balances (oauth_client_id=grok; not live)
+  x402 documented default cap: $20/day (not a guarantee)
+
+DEMO PASS
+  2 successful paper A2A payment(s), 1 rejected (over cap / risk)
+  Workflow: intent → quote → confirm → settle (PAPER/SIM)
+  No secrets. No withdrawals. Mocks labeled when used.

@@ -43,8 +43,11 @@ flowchart LR
 
 ## Quick start
 
+> **Paper/sim — not live B402.** Keep `PAYPULSE_MODE=paper` for demos and judging.
+
 ```bash
-cd /workspace/hackathons/binance-agent-os-payments
+git clone https://github.com/herewegoagain4436-creator/paypulse-binance-agent-os.git
+cd paypulse-binance-agent-os
 npm install
 npm run demo
 npm run dev
